@@ -56,7 +56,7 @@ Mantenha o Cluster Link desabilitado:
 # cluster.link.channel.properties.control=/opt/liferay/unicast/tcp.xml
 # cluster.link.channel.properties.transport.0=/opt/liferay/unicast/tcp.xml
 # cluster.link.auth.cert.alias=liferay-cluster-cert
-# cluster.link.auth.keystore.path=/opt/liferay/unicast/cluster_link_keystore.jks
+# cluster.link.auth.keystore.path=/opt/liferay/unicast/cluster_link_keystore.p12
 ```
 
 Inicie apenas o primeiro nó:
@@ -80,12 +80,11 @@ sudo chown -R liferay:liferay /opt/liferay/unicast
 
 ## Passo 3 — Gerar o Certificado no Primeiro Nó
 
+Gere um keystore próprio do ambiente. Nunca reutilize um keystore ou uma senha que tenha passado pelo Git.
+
 ```bash
-keytool -genkeypair \
-  -alias liferay-cluster-cert \
-  -keyalg RSA \
-  -keystore /opt/liferay/unicast/cluster_link_keystore.jks \
-  -storepass TESTE$%3030
+export CLUSTER_KEYSTORE_PASSWORD='<senha forte, sem $ nem %>'
+scripts/generate-cluster-keystore.sh /opt/liferay/unicast/cluster_link_keystore.p12 liferay-cluster-cert
 ```
 
 ---
@@ -93,75 +92,22 @@ keytool -genkeypair \
 ## Passo 4 — Distribuir o Keystore
 
 ```bash
-scp /opt/liferay/unicast/cluster_link_keystore.jks liferay@liferay-node2:/opt/liferay/unicast/
-scp /opt/liferay/unicast/cluster_link_keystore.jks liferay@liferay-node3:/opt/liferay/unicast/
+scp /opt/liferay/unicast/cluster_link_keystore.p12 liferay@<no-2>:/opt/liferay/unicast/
 ```
+
+Em cada nó, deixe o arquivo com permissão `600` para o usuário do Liferay.
 
 ---
 
-## Passo 5 — Configurar JGroups TCP em nós
+## Passo 5 — Configurar JGroups TCP nos Nós
 
-Criar arquivo em nós:
-
-```
-/opt/liferay/unicast/tcp.xml
-```
-
-```xml
-<config
-	xmlns="urn:org:jgroups"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/jgroups.xsd"
->
-	<TCP
-		bind_port="7800"
-		max_bundle_size="64K"
-		recv_buf_size="${tcp.recv_buf_size:130k}"
-		send_buf_size="${tcp.send_buf_size:130k}"
-		sock_conn_timeout="300"
-		thread_pool.keep_alive_time="30000"
-		thread_pool.max_threads="20"
-		thread_pool.min_threads="0"
-	/>
-
-  // Alterar aqui para utilizar os IPs reais      
-  <TCPPING 		
-    async_discovery="true"
-    initial_hosts="${jgroups.tcpping.initial_hosts:10.0.0.10[7800],10.0.0.11[7800],10.0.0.12[7800]}"
-    port_range="1"
-  />
-
-  <MERGE3
-    max_interval="30000"
-    min_interval="10000"
-  />
-	<FD_SOCK />
-	<FD_ALL interval="3000" timeout="9000" />
-	<VERIFY_SUSPECT timeout="1500" />
-	<BARRIER />
-	<pbcast.NAKACK2 use_mcast_xmit="false"
-				   discard_delivered_msgs="true" />
-	<UNICAST3 />
-	<pbcast.STABLE desired_avg_gossip="50000"
-				   max_bytes="4M" />
-	<pbcast.GMS join_timeout="3000" print_local_addr="true" />
-	<UFC
-		max_credits="2M"
-		min_threshold="0.4"
-	/>
-	<MFC
-		max_credits="2M"
-		min_threshold="0.4"
-	/>
-	<FRAG2 frag_size="60K" />
-	<!--RSVP resend_interval="2000" timeout="10000"/-->
-	<pbcast.STATE_TRANSFER />
-</config>
-```
+Copie [`unicast/tcp.xml`](unicast/tcp.xml) para `/opt/liferay/unicast/tcp.xml` em todos os nós, trocando `IP_NO_1` e
+`IP_NO_2` pelos IPs reais. **Os protocolos `AUTH` e `ASYM_ENCRYPT` são obrigatórios.** Sem eles, o cluster aceita
+qualquer nó, mesmo com as propriedades do passo 6 preenchidas.
 
 ---
 
-## Passo 6 — Habilitar o Cluster Link nos nós
+## Passo 6 — Habilitar o Cluster Link nos Nós
 
 ```properties
 cluster.link.enabled=true
@@ -169,12 +115,12 @@ cluster.link.channel.properties.control=/opt/liferay/unicast/tcp.xml
 cluster.link.channel.properties.transport.0=/opt/liferay/unicast/tcp.xml
 
 cluster.link.auth.cert.alias=liferay-cluster-cert
-cluster.link.auth.cert.password=TESTE$%3030
+cluster.link.auth.cert.password=<SENHA_DO_KEYSTORE>
 cluster.link.auth.cipher.type=RSA
-cluster.link.auth.keystore.password=TESTE$%3030
-cluster.link.auth.keystore.path=/opt/liferay/unicast/cluster_link_keystore.jks
-cluster.link.auth.keystore.type=JKS
-cluster.link.auth.value=TESTE$%3030
+cluster.link.auth.keystore.password=<SENHA_DO_KEYSTORE>
+cluster.link.auth.keystore.path=/opt/liferay/unicast/cluster_link_keystore.p12
+cluster.link.auth.keystore.type=PKCS12
+cluster.link.auth.value=<SEGREDO_COMPARTILHADO>
 
 web.server.display.node=true
 ```
@@ -191,11 +137,10 @@ web.server.display.node=true
 
 ## Passo 8 — Validação
 
-Nos logs:
+Nos logs, `Accepted view` deve listar todos os nós nos dois canais.
 
-```
-Accepted view
-```
+Em seguida, rode o teste negativo em uma máquina fora do cluster, conforme o [README](README.md). O resultado
+nunca pode ser `RESULT JOINED`.
 
 ## Referências:
 

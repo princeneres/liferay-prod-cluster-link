@@ -1,0 +1,29 @@
+# Lab on one machine: one Elasticsearch node, small heaps and no first-login prompts.
+# docker compose -f docker-compose.yml -f docker-compose.lab.yml up -d
+x-lab-environment: &lab-environment
+    LIFERAY_COMPANY_PERIOD_SECURITY_PERIOD_STRANGERS: ${LAB_STRANGERS:-true}
+    LIFERAY_COMPANY_PERIOD_SECURITY_PERIOD_STRANGERS_PERIOD_VERIFY: "false"
+    LIFERAY_SETUP_PERIOD_WIZARD_PERIOD_ENABLED: "false"
+    LIFERAY_TERMS_PERIOD_OF_PERIOD_USE_PERIOD_REQUIRED: "false"
+    LIFERAY_USERS_PERIOD_REMINDER_PERIOD_QUERIES_PERIOD_ENABLED: "false"
+    LIFERAY_PASSWORDS_PERIOD_DEFAULT_PERIOD_POLICY_PERIOD_CHANGE_PERIOD_REQUIRED: "false"
+
+services:
+    liferay-node1:
+        environment: *lab-environment
+        volumes:
+            - ./security-tests/stacks:/opt/liferay/unicast-insecure:ro
+    liferay-node2:
+        environment: *lab-environment
+        volumes:
+            - ./security-tests/stacks:/opt/liferay/unicast-insecure:ro
+    es-node1:
+        environment: !override
+            - node.name=es-node1
+            - cluster.name=liferay-es
+            - discovery.type=single-node
+            - xpack.security.enabled=false
+            - ES_JAVA_OPTS=-Xms${ES_HEAP:-1g} -Xmx${ES_HEAP:-1g}
+    es-node2:
+        profiles:
+            - disabled
