@@ -1,3 +1,33 @@
+x-liferay-node: &liferay-node
+    image: liferay/portal:7.4.3.132-ga132
+    depends_on:
+        postgres:
+            condition: service_healthy
+        es-node1:
+            condition: service_healthy
+    networks:
+        - liferay-network
+    healthcheck:
+        test: ["CMD-SHELL", "curl -fsL -o /dev/null http://localhost:8080 || exit 1"]
+        interval: 30s
+        timeout: 10s
+        retries: 10
+        start_period: 300s
+    mem_limit: 8g
+    cpus: 4.0
+
+x-liferay-environment: &liferay-environment
+    LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_DRIVER_UPPERCASEC_LASS_UPPERCASEN_AME: org.postgresql.Driver
+    LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}?useUnicode=true&characterEncoding=UTF-8&useFastDateParsing=false
+    LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_USERNAME: ${POSTGRES_USER}
+    LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_PASSWORD: ${POSTGRES_PASSWORD}
+    LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_PROPERTIES_PERIOD_CONTROL: ${JGROUPS_STACK:-/opt/liferay/unicast/tcp.xml}
+    LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_PROPERTIES_PERIOD_TRANSPORT_PERIOD__NUMBER0_: ${JGROUPS_STACK:-/opt/liferay/unicast/tcp.xml}
+    LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_AUTH_PERIOD_CERT_PERIOD_PASSWORD: ${CLUSTER_KEYSTORE_PASSWORD}
+    LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_AUTH_PERIOD_KEYSTORE_PERIOD_PASSWORD: ${CLUSTER_KEYSTORE_PASSWORD}
+    LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_AUTH_PERIOD_VALUE: ${CLUSTER_AUTH_VALUE}
+    LIFERAY_JVM_OPTS: -Xms${LIFERAY_HEAP:-6g} -Xmx${LIFERAY_HEAP:-6g} -XX:MaxMetaspaceSize=1g -Djgroups.tcpping.initial_hosts=172.30.0.11[7800],172.30.0.12[7800]
+
 services:
     postgres:
         image: postgres:16
@@ -10,8 +40,6 @@ services:
             - postgres-data:/var/lib/postgresql/data
         networks:
             - liferay-network
-        ports:
-            - "5432:5432"
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
             interval: 10s
@@ -21,80 +49,56 @@ services:
         cpus: 2.0
 
     liferay-node1:
-        image: liferay/portal:7.4.3.132-ga132
+        <<: *liferay-node
         container_name: liferay-node1
         environment:
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_DRIVER_UPPERCASEC_LASS_UPPERCASEN_AME=org.postgresql.Driver
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}?useUnicode=true&characterEncoding=UTF-8&useFastDateParsing=false
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_USERNAME=${POSTGRES_USER}
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_PASSWORD=${POSTGRES_PASSWORD}
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_CONTROL=control-channel-logic-name-1
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_TRANSPORT_PERIOD_NUMBER0=transport-channel-logic-name-1
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_AUTODETECT_PERIOD_ADDRESS=postgres:5432
-            - JAVA_OPTS=-Xms6g -Xmx6g -XX:MaxMetaspaceSize=1g -Djava.net.preferIPv4Stack=true
+            <<: *liferay-environment
+            LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_CONTROL: control-channel-logic-name-1
+            LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_TRANSPORT_PERIOD__NUMBER0_: transport-channel-logic-name-1
         volumes:
-            - liferay-node1-data:/opt/liferay/data
+            - document-library:/opt/liferay/data/document_library
             - ./configs:/opt/liferay/osgi/configs
+            - ./unicast:/opt/liferay/unicast:ro
+            - ./secrets:/opt/liferay/secrets:ro
             - ./files:/mnt/liferay/files
+            - ./local/modules:/opt/liferay/osgi/modules
         networks:
-            - liferay-network
+            liferay-network:
+                ipv4_address: 172.30.0.11
         ports:
-            - "8080:8080"
-        depends_on:
-            postgres:
-                condition: service_healthy
-            es-node1:
-                condition: service_healthy
-        healthcheck:
-            test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-            interval: 30s
-            timeout: 10s
-            retries: 5
-            start_period: 180s
-        mem_limit: 8g
-        cpus: 4.0
+            - "${NODE1_PORT:-8080}:8080"
 
     liferay-node2:
-        image: liferay/portal:7.4.3.132-ga132
+        <<: *liferay-node
         container_name: liferay-node2
-        environment:
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_DRIVER_UPPERCASEC_LASS_UPPERCASEN_AME=org.postgresql.Driver
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB}?useUnicode=true&characterEncoding=UTF-8&useFastDateParsing=false
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_USERNAME=${POSTGRES_USER}
-            - LIFERAY_JDBC_PERIOD_DEFAULT_PERIOD_PASSWORD=${POSTGRES_PASSWORD}
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_CONTROL=control-channel-logic-name-2
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_TRANSPORT_PERIOD_NUMBER0=transport-channel-logic-name-2
-            - LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_AUTODETECT_PERIOD_ADDRESS=postgres:5432
-            - JAVA_OPTS=-Xms6g -Xmx6g -XX:MaxMetaspaceSize=1g -Djava.net.preferIPv4Stack=true
-        volumes:
-            - liferay-node2-data:/opt/liferay/data
-            - ./configs:/opt/liferay/osgi/configs
-            - ./files:/mnt/liferay/files
-        networks:
-            - liferay-network
-        ports:
-            - "9080:8080"
+        # Two nodes creating the schema at once fail with duplicate keys on the first boot.
         depends_on:
-            postgres:
+            liferay-node1:
                 condition: service_healthy
-            es-node1:
-                condition: service_healthy
-        healthcheck:
-            test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-            interval: 30s
-            timeout: 10s
-            retries: 5
-            start_period: 180s
-        mem_limit: 8g
-        cpus: 4.0
+        environment:
+            <<: *liferay-environment
+            LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_CONTROL: control-channel-logic-name-2
+            LIFERAY_CLUSTER_PERIOD_LINK_PERIOD_CHANNEL_PERIOD_LOGIC_PERIOD_NAME_PERIOD_TRANSPORT_PERIOD__NUMBER0_: transport-channel-logic-name-2
+        volumes:
+            - document-library:/opt/liferay/data/document_library
+            - ./configs:/opt/liferay/osgi/configs
+            - ./unicast:/opt/liferay/unicast:ro
+            - ./secrets:/opt/liferay/secrets:ro
+            - ./files:/mnt/liferay/files
+            - ./local/modules:/opt/liferay/osgi/modules
+        networks:
+            liferay-network:
+                ipv4_address: 172.30.0.12
+        ports:
+            - "${NODE2_PORT:-9080}:8080"
 
     nginx:
-        image: nginx:latest
+        image: nginx:1.31.2
         container_name: nginx
         volumes:
             - ./nginx.conf:/etc/nginx/nginx.conf:ro
         ports:
-            - "80:80"
+            - "${NGINX_PORT:-80}:80"
         depends_on:
             - liferay-node1
             - liferay-node2
@@ -113,15 +117,13 @@ services:
             - cluster.initial_master_nodes=es-node1,es-node2
             - xpack.security.enabled=false
             - bootstrap.memory_lock=true
-            - ES_JAVA_OPTS=-Xms4g -Xmx4g
+            - ES_JAVA_OPTS=-Xms${ES_HEAP:-4g} -Xmx${ES_HEAP:-4g}
         ulimits:
             memlock:
                 soft: -1
                 hard: -1
         volumes:
             - es-node1-data:/usr/share/elasticsearch/data
-        ports:
-            - "9200:9200"
         healthcheck:
             test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health | grep -E 'green|yellow'"]
             interval: 30s
@@ -151,7 +153,7 @@ services:
             - cluster.initial_master_nodes=es-node1,es-node2
             - xpack.security.enabled=false
             - bootstrap.memory_lock=true
-            - ES_JAVA_OPTS=-Xms4g -Xmx4g
+            - ES_JAVA_OPTS=-Xms${ES_HEAP:-4g} -Xmx${ES_HEAP:-4g}
         ulimits:
             memlock:
                 soft: -1
@@ -175,10 +177,12 @@ services:
 networks:
     liferay-network:
         driver: bridge
+        ipam:
+            config:
+                - subnet: 172.30.0.0/24
 
 volumes:
     postgres-data:
-    liferay-node1-data:
-    liferay-node2-data:
+    document-library:
     es-node1-data:
     es-node2-data:

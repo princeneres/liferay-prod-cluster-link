@@ -1,0 +1,78 @@
+<!--
+	TCP unicast stack with node authentication and message encryption.
+
+	AUTH rejects a node that cannot prove it holds the cluster keystore.
+	ASYM_ENCRYPT drops traffic that is not encrypted with the cluster key.
+	A stack without these two protocols ignores every cluster.link.auth.* property.
+
+	Use IP addresses in initial_hosts: a host name that does not resolve at boot makes the
+	channel fail and the portal answers HTTP 500 until it restarts.
+-->
+<config
+	xmlns="urn:org:jgroups"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/jgroups-4.1.xsd"
+>
+	<TCP
+		bind_port="7800"
+		max_bundle_size="64K"
+		recv_buf_size="${tcp.recv_buf_size:130k}"
+		send_buf_size="${tcp.send_buf_size:130k}"
+		sock_conn_timeout="300"
+		thread_pool.keep_alive_time="30000"
+		thread_pool.max_threads="20"
+		thread_pool.min_threads="0"
+	/>
+	<TCPPING
+		async_discovery="true"
+		initial_hosts="${jgroups.tcpping.initial_hosts:IP_NO_1[7800],IP_NO_2[7800]}"
+		port_range="1"
+	/>
+	<MERGE3
+		max_interval="30000"
+		min_interval="10000"
+	/>
+	<FD_SOCK />
+	<FD_ALL interval="3000" timeout="9000" />
+	<VERIFY_SUSPECT timeout="1500" />
+	<BARRIER />
+	<ASYM_ENCRYPT
+		asym_algorithm="RSA"
+		asym_keylength="2048"
+		change_key_on_coord_leave="true"
+		change_key_on_leave="true"
+		sym_algorithm="AES/CBC/PKCS5Padding"
+		sym_iv_length="16"
+		sym_keylength="256"
+	/>
+	<pbcast.NAKACK2
+		discard_delivered_msgs="true"
+		use_mcast_xmit="false"
+	/>
+	<UNICAST3 />
+	<pbcast.STABLE
+		desired_avg_gossip="50000"
+		max_bytes="4M"
+	/>
+	<AUTH
+		auth_class="org.jgroups.auth.X509Token"
+		auth_value="${cluster.link.auth.value}"
+		cert_alias="${cluster.link.auth.cert.alias}"
+		cert_password="${cluster.link.auth.cert.password}"
+		cipher_type="${cluster.link.auth.cipher.type}"
+		keystore_password="${cluster.link.auth.keystore.password}"
+		keystore_path="${cluster.link.auth.keystore.path}"
+		keystore_type="${cluster.link.auth.keystore.type}"
+	/>
+	<pbcast.GMS join_timeout="3000" print_local_addr="true" />
+	<UFC
+		max_credits="2M"
+		min_threshold="0.4"
+	/>
+	<MFC
+		max_credits="2M"
+		min_threshold="0.4"
+	/>
+	<FRAG2 frag_size="60K" />
+	<pbcast.STATE_TRANSFER />
+</config>
